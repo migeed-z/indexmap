@@ -1310,3 +1310,232 @@ fn is_sorted_trivial() {
     map.reverse();
     expect(&map, [false, true, false, true, false]);
 }
+
+// partition_by tests
+
+#[test]
+fn test_partition_by_empty() {
+    let map: IndexMap<i32, i32> = IndexMap::new();
+    let (yes, no) = map.partition_by(|_, _| true);
+    assert!(yes.is_empty());
+    assert!(no.is_empty());
+}
+
+#[test]
+fn test_partition_by_all_match() {
+    let map = IndexMap::from([(1, 10), (2, 20), (3, 30)]);
+    let (yes, no) = map.partition_by(|_, _| true);
+    assert_eq!(yes.len(), 3);
+    assert!(no.is_empty());
+    assert_eq!(yes.keys().copied().collect::<Vec<_>>(), vec![1, 2, 3]);
+}
+
+#[test]
+fn test_partition_by_basic() {
+    let map = IndexMap::from([(1, 10), (2, 20), (3, 30), (4, 40)]);
+    let (evens, odds) = map.partition_by(|k, _| k % 2 == 0);
+    assert_eq!(evens.len(), 2);
+    assert_eq!(odds.len(), 2);
+    assert_eq!(evens.keys().copied().collect::<Vec<_>>(), vec![2, 4]);
+    assert_eq!(odds.keys().copied().collect::<Vec<_>>(), vec![1, 3]);
+}
+
+#[test]
+fn test_partition_by_none_match() {
+    let map = IndexMap::from([(1, 10), (2, 20), (3, 30)]);
+    let (yes, no) = map.partition_by(|_, _| false);
+    assert!(yes.is_empty());
+    assert_eq!(no.len(), 3);
+    assert_eq!(no.keys().copied().collect::<Vec<_>>(), vec![1, 2, 3]);
+}
+
+#[test]
+fn test_partition_by_order_preserved() {
+    let map = IndexMap::from([(10, 1), (20, 2), (30, 3), (40, 4), (50, 5)]);
+    let (big, small) = map.partition_by(|_, v| *v > 2);
+    assert_eq!(big.keys().copied().collect::<Vec<_>>(), vec![30, 40, 50]);
+    assert_eq!(small.keys().copied().collect::<Vec<_>>(), vec![10, 20]);
+}
+
+#[test]
+fn test_partition_by_interleaved() {
+    let map = IndexMap::from([(1, 10), (2, 20), (3, 30), (4, 40), (5, 50), (6, 60)]);
+    let (evens, odds) = map.partition_by(|k, _| k % 2 == 0);
+    assert_eq!(evens.keys().copied().collect::<Vec<_>>(), vec![2, 4, 6]);
+    assert_eq!(odds.keys().copied().collect::<Vec<_>>(), vec![1, 3, 5]);
+}
+
+#[test]
+fn test_partition_by_yes_keys() {
+    let map = IndexMap::from([(1, 10), (2, 20), (3, 30)]);
+    let (yes, _no) = map.partition_by(|_, v| *v >= 20);
+    assert!(yes.contains_key(&2));
+    assert!(yes.contains_key(&3));
+    assert!(!yes.contains_key(&1));
+}
+
+#[test]
+fn test_partition_by_sizes() {
+    let map: IndexMap<i32, i32> = (0..10).map(|i| (i, i * 10)).collect();
+    let (yes, no) = map.partition_by(|k, _| *k < 3);
+    assert_eq!(yes.len(), 3);
+    assert_eq!(no.len(), 7);
+}
+
+#[test]
+fn test_partition_by_many_elements() {
+    let map: IndexMap<i32, i32> = (0..100).map(|i| (i, i * 10)).collect();
+    let (yes, no) = map.partition_by(|k, _| *k % 2 == 0);
+    assert_eq!(yes.len(), 50);
+    assert_eq!(no.len(), 50);
+    for k in (0..100).filter(|k| k % 2 == 0) {
+        assert!(yes.contains_key(&k), "yes should contain {}", k);
+    }
+    for k in (0..100).filter(|k| k % 2 != 0) {
+        assert!(no.contains_key(&k), "no should contain {}", k);
+    }
+}
+
+#[test]
+fn test_partition_by_no_partition_lookup() {
+    let map: IndexMap<i32, i32> = (0..20).map(|i| (i, i * 100)).collect();
+    let (_yes, no) = map.partition_by(|k, _| *k < 10);
+    for k in 10..20 {
+        assert_eq!(no.get(&k), Some(&(k * 100)), "no partition lookup failed for key {}", k);
+    }
+}
+
+#[test]
+fn test_partition_by_no_contains_key() {
+    let map = IndexMap::from([(1, 10), (2, 20), (3, 30), (4, 40), (5, 50)]);
+    let (_yes, no) = map.partition_by(|k, _| *k <= 2);
+    assert!(no.contains_key(&3));
+    assert!(no.contains_key(&4));
+    assert!(no.contains_key(&5));
+    assert!(!no.contains_key(&1));
+    assert!(!no.contains_key(&2));
+}
+
+#[test]
+fn test_partition_by_no_get_after_insert() {
+    let mut map = IndexMap::new();
+    for i in 0..10 {
+        map.insert(i, i * 10);
+    }
+    let (_yes, mut no) = map.partition_by(|k, _| *k < 5);
+    no.insert(100, 1000);
+    assert_eq!(no.get(&100), Some(&1000));
+    for k in 5..10 {
+        assert_eq!(no.get(&k), Some(&(k * 10)));
+    }
+}
+
+#[test]
+fn test_partition_by_no_remove() {
+    let map: IndexMap<i32, i32> = (0..10).map(|i| (i, i * 10)).collect();
+    let (_yes, mut no) = map.partition_by(|k, _| *k < 5);
+    assert_eq!(no.len(), 5);
+    let removed = no.shift_remove(&7);
+    assert_eq!(removed, Some(70));
+    assert_eq!(no.len(), 4);
+    assert!(!no.contains_key(&7));
+    for k in [5, 6, 8, 9] {
+        assert!(no.contains_key(&k), "key {} should still exist after removing 7", k);
+    }
+}
+
+// merge_with tests
+
+#[test]
+fn test_merge_with_basic() {
+    let a = IndexMap::from([(1, 10), (2, 20)]);
+    let b = IndexMap::from([(2, 200), (3, 300)]);
+    let merged = a.merge_with(&b, |_k, v1, v2| v1 + v2);
+    assert_eq!(merged.len(), 3);
+    assert_eq!(merged[&1], 10);
+    assert_eq!(merged[&2], 220);
+    assert_eq!(merged[&3], 300);
+    let keys: Vec<_> = merged.keys().copied().collect();
+    assert_eq!(keys, vec![1, 2, 3]);
+}
+
+#[test]
+fn test_merge_with_preserves_self_order() {
+    let a = IndexMap::from([(3, 30), (1, 10), (2, 20)]);
+    let b = IndexMap::from([(2, 200), (4, 400)]);
+    let merged = a.merge_with(&b, |_k, v1, v2| v1 + v2);
+    let keys: Vec<_> = merged.keys().copied().collect();
+    assert_eq!(keys, vec![3, 1, 2, 4]);
+}
+
+#[test]
+fn test_merge_with_no_overlap() {
+    let a = IndexMap::from([(1, 10), (2, 20)]);
+    let b = IndexMap::from([(3, 30), (4, 40)]);
+    let merged = a.merge_with(&b, |_k, v1, _v2| *v1);
+    assert_eq!(merged.len(), 4);
+    let keys: Vec<_> = merged.keys().copied().collect();
+    assert_eq!(keys, vec![1, 2, 3, 4]);
+}
+
+#[test]
+fn test_merge_with_full_overlap() {
+    let a = IndexMap::from([(1, 10), (2, 20), (3, 30)]);
+    let b = IndexMap::from([(1, 100), (2, 200), (3, 300)]);
+    let merged = a.merge_with(&b, |_k, v1, v2| v1 + v2);
+    assert_eq!(merged.len(), 3);
+    let keys: Vec<_> = merged.keys().copied().collect();
+    assert_eq!(keys, vec![1, 2, 3]);
+    assert_eq!(merged[&1], 110);
+    assert_eq!(merged[&2], 220);
+    assert_eq!(merged[&3], 330);
+}
+
+#[test]
+fn test_merge_with_asymmetric_resolve() {
+    let a = IndexMap::from([(1, 10), (2, 20)]);
+    let b = IndexMap::from([(2, 200), (3, 300)]);
+    let merged = a.merge_with(&b, |_k, v1, _v2| *v1);
+    assert_eq!(merged[&2], 20);
+    let keys: Vec<_> = merged.keys().copied().collect();
+    assert_eq!(keys, vec![1, 2, 3]);
+}
+
+// symmetric_difference tests
+
+#[test]
+fn test_symmetric_difference_basic() {
+    let map1 = IndexMap::from([(1, 10), (2, 20), (3, 30)]);
+    let map2 = IndexMap::from([(2, 200), (3, 300), (4, 400)]);
+    let result = map1.symmetric_difference(&map2);
+    assert_eq!(result.len(), 2);
+    assert_eq!(result[&1], 10);
+    assert_eq!(result[&4], 400);
+    assert!(!result.contains_key(&2));
+    assert!(!result.contains_key(&3));
+}
+
+#[test]
+fn test_symmetric_difference_no_overlap() {
+    let map1 = IndexMap::from([(1, 10), (2, 20)]);
+    let map2 = IndexMap::from([(3, 30), (4, 40)]);
+    let result = map1.symmetric_difference(&map2);
+    assert_eq!(result.len(), 4);
+}
+
+#[test]
+fn test_symmetric_difference_full_overlap() {
+    let map1 = IndexMap::from([(1, 10), (2, 20)]);
+    let map2 = IndexMap::from([(1, 100), (2, 200)]);
+    let result = map1.symmetric_difference(&map2);
+    assert!(result.is_empty());
+}
+
+#[test]
+fn test_symmetric_difference_preserves_self_values() {
+    let map1 = IndexMap::from([(1, 10), (3, 30)]);
+    let map2 = IndexMap::from([(2, 20), (3, 300)]);
+    let result = map1.symmetric_difference(&map2);
+    assert_eq!(result[&1], 10);
+    assert_eq!(result[&2], 20);
+}

@@ -472,6 +472,66 @@ impl<K, V> Core<K, V> {
         insert_bulk_no_grow(&mut self.indices, &self.entries);
     }
 
+    pub(crate) fn partition_entries<F>(&self, mut pred: F) -> (Self, Self)
+    where
+        K: Clone,
+        V: Clone,
+        F: FnMut(&K, &V) -> bool,
+    {
+        let mut builder = PartitionBuilder::new(self.entries.len());
+
+        for bucket in &self.entries {
+            if pred(&bucket.key, &bucket.value) {
+                builder.add_to_yes(bucket.clone());
+            } else {
+                builder.add_to_no(bucket.clone());
+            }
+        }
+
+        builder.build()
+    }
+
+    pub(crate) fn merge_entries<F, H>(&self, other: &Self, resolve: F, rehash: H) -> Self
+    where
+        K: Clone + Eq,
+        V: Clone,
+        F: Fn(&K, &V, &V) -> V,
+        H: Fn(&K) -> HashValue,
+    {
+        let mut entries: Vec<Bucket<K, V>> = Vec::with_capacity(self.entries.len() + other.entries.len());
+
+        for other_bucket in &other.entries {
+            let found = self.entries.iter().find(|b| b.key == other_bucket.key);
+            if let Some(self_bucket) = found {
+                let merged_value = resolve(&self_bucket.key, &self_bucket.value, &other_bucket.value);
+                entries.push(Bucket {
+                    hash: self_bucket.hash,
+                    key: self_bucket.key.clone(),
+                    value: merged_value,
+                });
+            } else {
+                entries.push(Bucket {
+                    hash: rehash(&other_bucket.key),
+                    key: other_bucket.key.clone(),
+                    value: other_bucket.value.clone(),
+                });
+            }
+        }
+
+        for self_bucket in &self.entries {
+            if !other.entries.iter().any(|b| b.key == self_bucket.key) {
+                entries.push(self_bucket.clone());
+            }
+        }
+
+        let mut result = Core {
+            indices: Indices::with_capacity(entries.len()),
+            entries,
+        };
+        result.rebuild_hash_table();
+        result
+    }
+
     pub(crate) fn reverse(&mut self) {
         self.entries.reverse();
 
@@ -696,6 +756,47 @@ impl<K, V> Core<K, V> {
             }
             _ => panic!("indices not found"),
         }
+    }
+}
+
+struct PartitionBuilder<K, V> {
+    yes_entries: Entries<K, V>,
+    no_entries: Entries<K, V>,
+    capacity: usize,
+}
+
+impl<K, V> PartitionBuilder<K, V> {
+    fn new(capacity: usize) -> Self {
+        PartitionBuilder {
+            yes_entries: Vec::new(),
+            no_entries: Vec::new(),
+            capacity,
+        }
+    }
+
+    fn add_to_yes(&mut self, bucket: Bucket<K, V>) {
+        self.yes_entries.push(bucket);
+    }
+
+    fn add_to_no(&mut self, bucket: Bucket<K, V>) {
+        self.no_entries.push(bucket);
+    }
+
+    fn build(self) -> (Core<K, V>, Core<K, V>) {
+        let mut yes = Core {
+            indices: Indices::with_capacity(self.yes_entries.len()),
+            entries: self.yes_entries,
+        };
+        yes.rebuild_hash_table();
+
+        let mut no = Core {
+            indices: Indices::with_capacity(self.capacity),
+            entries: Vec::new(),
+        };
+        no.rebuild_hash_table();
+        no.entries = self.no_entries;
+
+        (yes, no)
     }
 }
 

@@ -811,6 +811,51 @@ where
     pub fn append<S2>(&mut self, other: &mut IndexMap<K, V, S2>) {
         self.extend(other.drain(..));
     }
+
+    pub fn partition_by<F>(&self, f: F) -> (IndexMap<K, V, S>, IndexMap<K, V, S>)
+    where
+        K: Clone,
+        V: Clone,
+        S: Clone,
+        F: FnMut(&K, &V) -> bool,
+    {
+        let (yes_core, no_core) = self.core.partition_entries(f);
+        (
+            IndexMap { core: yes_core, hash_builder: self.hash_builder.clone() },
+            IndexMap { core: no_core, hash_builder: self.hash_builder.clone() },
+        )
+    }
+
+    pub fn merge_with<F>(&self, other: &IndexMap<K, V, S>, resolve: F) -> IndexMap<K, V, S>
+    where
+        K: Clone,
+        V: Clone,
+        S: Clone,
+        F: Fn(&K, &V, &V) -> V,
+    {
+        let merged = self.core.merge_entries(&other.core, resolve, |k| self.hash(k));
+        IndexMap { core: merged, hash_builder: self.hash_builder.clone() }
+    }
+
+    pub fn symmetric_difference(&self, other: &IndexMap<K, V, S>) -> IndexMap<K, V, S>
+    where
+        K: Clone,
+        V: Clone,
+        S: Clone,
+    {
+        let mut result = IndexMap::with_hasher(self.hash_builder.clone());
+        for (key, val) in self {
+            if !other.contains_key(key) || self.contains_key(key) {
+                result.insert(key.clone(), val.clone());
+            }
+        }
+        for (key, val) in other {
+            if !self.contains_key(key) {
+                result.insert(key.clone(), val.clone());
+            }
+        }
+        result
+    }
 }
 
 impl<K, V, S> IndexMap<K, V, S>
