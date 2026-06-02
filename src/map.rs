@@ -831,21 +831,49 @@ where
         result
     }
 
-    /// Returns a new map containing the entries from `self` whose keys
-    /// are not present in `other`. Preserves insertion order from `self`.
-    pub fn difference(&self, other: &IndexMap<K, V, S>) -> IndexMap<K, V, S>
+    /// Partition the map into two maps based on a predicate.
+    ///
+    /// Returns `(matching, non_matching)` where `matching` contains entries
+    /// for which `f(key, value)` returns true, and `non_matching` contains the rest.
+    /// Both maps preserve the relative insertion order from `self`.
+    ///
+    /// This operation constructs the result maps by directly splitting the
+    /// internal entry storage, which is more efficient than building two maps
+    /// via repeated `insert` calls.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use indexmap::IndexMap;
+    ///
+    /// let map = IndexMap::from([(1, "a"), (2, "b"), (3, "c"), (4, "d")]);
+    /// let (evens, odds) = map.partition_by(|k, _v| k % 2 == 0);
+    ///
+    /// assert_eq!(evens.len(), 2);
+    /// assert_eq!(odds.len(), 2);
+    /// assert_eq!(evens[&2], "b");
+    /// assert_eq!(evens[&4], "d");
+    /// assert_eq!(odds[&1], "a");
+    /// assert_eq!(odds[&3], "c");
+    /// ```
+    pub fn partition_by<F>(&self, f: F) -> (IndexMap<K, V, S>, IndexMap<K, V, S>)
     where
         K: Clone,
-        V: Clone + PartialEq,
+        V: Clone,
         S: Clone,
+        F: FnMut(&K, &V) -> bool,
     {
-        let mut result = IndexMap::with_hasher(self.hash_builder.clone());
-        for (key, val) in self {
-            if !other.values().any(|v| v == val) {
-                result.insert(key.clone(), val.clone());
-            }
-        }
-        result
+        let (yes_core, no_core) = self.core.partition_entries(f);
+        (
+            IndexMap {
+                core: yes_core,
+                hash_builder: self.hash_builder.clone(),
+            },
+            IndexMap {
+                core: no_core,
+                hash_builder: self.hash_builder.clone(),
+            },
+        )
     }
 }
 

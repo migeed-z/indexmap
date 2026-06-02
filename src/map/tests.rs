@@ -1396,71 +1396,127 @@ fn test_intersect_with_asymmetric_merge() {
 }
 
 #[test]
-fn test_difference_basic() {
-    let map1 = IndexMap::from([(1, 10), (2, 20), (3, 30), (4, 40)]);
-    let map2 = IndexMap::from([(2, 200), (4, 400), (5, 500)]);
-    let result = map1.difference(&map2);
-    assert_eq!(result.len(), 2);
-    assert_eq!(result[&1], 10);
-    assert_eq!(result[&3], 30);
+fn test_partition_by_empty() {
+    let map: IndexMap<i32, i32> = IndexMap::new();
+    let (yes, no) = map.partition_by(|_, _| true);
+    assert!(yes.is_empty());
+    assert!(no.is_empty());
 }
 
 #[test]
-fn test_difference_no_overlap() {
-    let map1 = IndexMap::from([(1, 10), (2, 20)]);
-    let map2 = IndexMap::from([(3, 30), (4, 40)]);
-    let result = map1.difference(&map2);
-    assert_eq!(result.len(), 2);
-    assert_eq!(result, map1);
+fn test_partition_by_all_match() {
+    let map = IndexMap::from([(1, 10), (2, 20), (3, 30)]);
+    let (yes, no) = map.partition_by(|_, _| true);
+    assert_eq!(yes.len(), 3);
+    assert!(no.is_empty());
+    assert_eq!(yes[&1], 10);
+    assert_eq!(yes[&2], 20);
+    assert_eq!(yes[&3], 30);
 }
 
 #[test]
-fn test_difference_full_overlap() {
-    let map1 = IndexMap::from([(1, 10), (2, 20)]);
-    let map2 = IndexMap::from([(1, 100), (2, 200)]);
-    let result = map1.difference(&map2);
-    assert!(result.is_empty());
+fn test_partition_by_none_match() {
+    let map = IndexMap::from([(1, 10), (2, 20), (3, 30)]);
+    let (yes, no) = map.partition_by(|_, _| false);
+    assert!(yes.is_empty());
+    assert_eq!(no.len(), 3);
+    assert_eq!(no[&1], 10);
+    assert_eq!(no[&2], 20);
+    assert_eq!(no[&3], 30);
 }
 
 #[test]
-fn test_difference_empty_other() {
-    let map1 = IndexMap::from([(1, 10), (2, 20)]);
-    let map2: IndexMap<i32, i32> = IndexMap::new();
-    let result = map1.difference(&map2);
-    assert_eq!(result.len(), 2);
-    assert_eq!(result, map1);
+fn test_partition_by_yes_keys() {
+    let map = IndexMap::from([(1, 10), (2, 20), (3, 30), (4, 40), (5, 50)]);
+    let (evens, _) = map.partition_by(|k, _| k % 2 == 0);
+    assert_eq!(evens.len(), 2);
+    assert_eq!(evens[&2], 20);
+    assert_eq!(evens[&4], 40);
+    assert!(!evens.contains_key(&1));
 }
 
 #[test]
-fn test_difference_preserves_order() {
-    let map1 = IndexMap::from([(3, 30), (1, 10), (4, 40), (2, 20)]);
-    let map2 = IndexMap::from([(1, 100), (4, 400)]);
-    let result = map1.difference(&map2);
-    let keys: Vec<_> = result.keys().copied().collect();
-    assert_eq!(keys, vec![3, 2]);
+fn test_partition_by_sizes() {
+    let map: IndexMap<i32, i32> = (0..10).map(|i| (i, i)).collect();
+    let (yes, no) = map.partition_by(|k, _| k % 3 == 0);
+    // Keys: 0,1,2,3,4,5,6,7,8,9 — multiples of 3: 0,3,6,9
+    assert_eq!(yes.len(), 4);
+    assert_eq!(no.len(), 6);
 }
 
 #[test]
-fn test_difference_value_overlap_different_keys() {
-    let map1 = IndexMap::from([(1, 100), (2, 200), (3, 300)]);
-    let map2 = IndexMap::from([(10, 200), (20, 300)]);
-    let result = map1.difference(&map2);
-    assert_eq!(result.len(), 3);
-    assert_eq!(result[&1], 100);
-    assert_eq!(result[&2], 200);
-    assert_eq!(result[&3], 300);
+fn test_partition_by_basic() {
+    let map = IndexMap::from([(1, 10), (2, 20), (3, 30), (4, 40)]);
+    let (evens, odds) = map.partition_by(|k, _v| k % 2 == 0);
+    assert_eq!(evens.len(), 2);
+    assert_eq!(odds.len(), 2);
+    assert_eq!(evens[&2], 20);
+    assert_eq!(evens[&4], 40);
+    assert_eq!(odds[&1], 10);
+    assert_eq!(odds[&3], 30);
 }
 
 #[test]
-fn test_difference_many_elements() {
-    let map1: IndexMap<i32, i32> = (0..100).map(|i| (i, i * 10)).collect();
-    let map2: IndexMap<i32, i32> = (50..150).map(|i| (i, i * 100)).collect();
-    let result = map1.difference(&map2);
-    assert_eq!(result.len(), 50);
-    for i in 0..50 {
-        assert_eq!(result[&i], i * 10);
+fn test_partition_by_no_partition_lookup() {
+    let map: IndexMap<i32, i32> = [(10, 10), (20, 20), (30, 30), (40, 40), (50, 50)]
+        .into_iter()
+        .collect();
+    let (small, large) = map.partition_by(|_k, v| *v < 25);
+    assert_eq!(small.len(), 2);
+    assert_eq!(large.len(), 3);
+    assert_eq!(large.get(&30), Some(&30));
+    assert_eq!(large.get(&40), Some(&40));
+    assert_eq!(large.get(&50), Some(&50));
+}
+
+#[test]
+fn test_partition_by_interleaved() {
+    let map = IndexMap::from([
+        ("a", 1),
+        ("b", 2),
+        ("c", 3),
+        ("d", 4),
+        ("e", 5),
+        ("f", 6),
+    ]);
+    let (odds, evens) = map.partition_by(|_k, v| v % 2 == 1);
+    assert_eq!(odds.len(), 3);
+    assert_eq!(evens.len(), 3);
+    assert_eq!(odds[&"a"], 1);
+    assert_eq!(odds[&"c"], 3);
+    assert_eq!(odds[&"e"], 5);
+    assert_eq!(evens[&"b"], 2);
+    assert_eq!(evens[&"d"], 4);
+    assert_eq!(evens[&"f"], 6);
+}
+
+#[test]
+fn test_partition_by_order_preserved() {
+    let map = IndexMap::from([(5, 50), (3, 30), (1, 10), (4, 40), (2, 20)]);
+    let (big, small) = map.partition_by(|_k, v| *v > 25);
+    // big should have: 5→50, 3→30, 4→40 in that order
+    let big_keys: Vec<_> = big.keys().copied().collect();
+    assert_eq!(big_keys, vec![5, 3, 4]);
+    // small should have: 1→10, 2→20 in that order
+    let small_keys: Vec<_> = small.keys().copied().collect();
+    assert_eq!(small_keys, vec![1, 2]);
+    // Verify lookups work on both partitions
+    assert_eq!(small.get(&1), Some(&10));
+    assert_eq!(small.get(&2), Some(&20));
+}
+
+#[test]
+fn test_partition_by_many_elements() {
+    let map: IndexMap<i32, i32> = (0..100).map(|i| (i, i * 10)).collect();
+    let (multiples, rest) = map.partition_by(|k, _| k % 5 == 0);
+    // 0,5,10,...,95 → 20 multiples of 5
+    assert_eq!(multiples.len(), 20);
+    assert_eq!(rest.len(), 80);
+    // Check yes partition lookups
+    for i in (0..100).filter(|i| i % 5 == 0) {
+        assert_eq!(multiples[&i], i * 10);
     }
-    for i in 50..100 {
-        assert!(!result.contains_key(&i));
+    for i in (0..100).filter(|i| i % 5 != 0) {
+        assert_eq!(rest[&i], i * 10);
     }
 }
