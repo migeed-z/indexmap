@@ -823,9 +823,26 @@ where
         F: Fn(&K, &V, &V) -> V,
     {
         let mut result = IndexMap::with_hasher(self.hash_builder.clone());
-        for (key, other_val) in other {
-            if let Some(self_val) = self.get(key) {
+        for (key, self_val) in self {
+            if let Some(other_val) = other.get(key) {
                 result.insert(key.clone(), f(key, self_val, other_val));
+            }
+        }
+        result
+    }
+
+    /// Returns a new map containing the entries from `self` whose keys
+    /// are not present in `other`. Preserves insertion order from `self`.
+    pub fn difference(&self, other: &IndexMap<K, V, S>) -> IndexMap<K, V, S>
+    where
+        K: Clone,
+        V: Clone + PartialEq,
+        S: Clone,
+    {
+        let mut result = IndexMap::with_hasher(self.hash_builder.clone());
+        for (key, val) in self {
+            if !other.values().any(|v| v == val) {
+                result.insert(key.clone(), val.clone());
             }
         }
         result

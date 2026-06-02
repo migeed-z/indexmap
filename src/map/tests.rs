@@ -1375,3 +1375,92 @@ fn test_intersect_with_many_elements() {
     assert!(!result.contains_key(&99));
     assert!(!result.contains_key(&200));
 }
+
+#[test]
+fn test_intersect_with_merge_fn_arg_order() {
+    let map1 = IndexMap::from([(1, 10), (2, 20)]);
+    let map2 = IndexMap::from([(1, 100), (2, 200)]);
+    // f receives (key, self_val, other_val) — take self's value only
+    let result = map1.intersect_with(&map2, |_k, self_val, _other_val| *self_val);
+    assert_eq!(result[&1], 10);
+    assert_eq!(result[&2], 20);
+}
+
+#[test]
+fn test_intersect_with_asymmetric_merge() {
+    let map1 = IndexMap::from([(1, 5), (2, 10), (3, 15)]);
+    let map2 = IndexMap::from([(2, 100), (3, 200)]);
+    let result = map1.intersect_with(&map2, |_k, v1, v2| v1 * 10 + *v2);
+    assert_eq!(result[&2], 10 * 10 + 100);
+    assert_eq!(result[&3], 15 * 10 + 200);
+}
+
+#[test]
+fn test_difference_basic() {
+    let map1 = IndexMap::from([(1, 10), (2, 20), (3, 30), (4, 40)]);
+    let map2 = IndexMap::from([(2, 200), (4, 400), (5, 500)]);
+    let result = map1.difference(&map2);
+    assert_eq!(result.len(), 2);
+    assert_eq!(result[&1], 10);
+    assert_eq!(result[&3], 30);
+}
+
+#[test]
+fn test_difference_no_overlap() {
+    let map1 = IndexMap::from([(1, 10), (2, 20)]);
+    let map2 = IndexMap::from([(3, 30), (4, 40)]);
+    let result = map1.difference(&map2);
+    assert_eq!(result.len(), 2);
+    assert_eq!(result, map1);
+}
+
+#[test]
+fn test_difference_full_overlap() {
+    let map1 = IndexMap::from([(1, 10), (2, 20)]);
+    let map2 = IndexMap::from([(1, 100), (2, 200)]);
+    let result = map1.difference(&map2);
+    assert!(result.is_empty());
+}
+
+#[test]
+fn test_difference_empty_other() {
+    let map1 = IndexMap::from([(1, 10), (2, 20)]);
+    let map2: IndexMap<i32, i32> = IndexMap::new();
+    let result = map1.difference(&map2);
+    assert_eq!(result.len(), 2);
+    assert_eq!(result, map1);
+}
+
+#[test]
+fn test_difference_preserves_order() {
+    let map1 = IndexMap::from([(3, 30), (1, 10), (4, 40), (2, 20)]);
+    let map2 = IndexMap::from([(1, 100), (4, 400)]);
+    let result = map1.difference(&map2);
+    let keys: Vec<_> = result.keys().copied().collect();
+    assert_eq!(keys, vec![3, 2]);
+}
+
+#[test]
+fn test_difference_value_overlap_different_keys() {
+    let map1 = IndexMap::from([(1, 100), (2, 200), (3, 300)]);
+    let map2 = IndexMap::from([(10, 200), (20, 300)]);
+    let result = map1.difference(&map2);
+    assert_eq!(result.len(), 3);
+    assert_eq!(result[&1], 100);
+    assert_eq!(result[&2], 200);
+    assert_eq!(result[&3], 300);
+}
+
+#[test]
+fn test_difference_many_elements() {
+    let map1: IndexMap<i32, i32> = (0..100).map(|i| (i, i * 10)).collect();
+    let map2: IndexMap<i32, i32> = (50..150).map(|i| (i, i * 100)).collect();
+    let result = map1.difference(&map2);
+    assert_eq!(result.len(), 50);
+    for i in 0..50 {
+        assert_eq!(result[&i], i * 10);
+    }
+    for i in 50..100 {
+        assert!(!result.contains_key(&i));
+    }
+}
