@@ -811,6 +811,70 @@ where
     pub fn append<S2>(&mut self, other: &mut IndexMap<K, V, S2>) {
         self.extend(other.drain(..));
     }
+
+    /// Returns a new map containing only the keys present in both `self` and `other`.
+    /// For common keys, the value is determined by calling `f(key, self_value, other_value)`.
+    /// The result preserves the insertion order of `self`.
+    pub fn intersect_with<F>(&self, other: &IndexMap<K, V, S>, f: F) -> IndexMap<K, V, S>
+    where
+        K: Clone,
+        V: Clone,
+        S: Clone,
+        F: Fn(&K, &V, &V) -> V,
+    {
+        let mut result = IndexMap::with_hasher(self.hash_builder.clone());
+        for (key, self_val) in self {
+            if let Some(other_val) = other.get(key) {
+                result.insert(key.clone(), f(key, self_val, other_val));
+            }
+        }
+        result
+    }
+
+    /// Partition the map into two maps based on a predicate.
+    ///
+    /// Returns `(matching, non_matching)` where `matching` contains entries
+    /// for which `f(key, value)` returns true, and `non_matching` contains the rest.
+    /// Both maps preserve the relative insertion order from `self`.
+    ///
+    /// This operation constructs the result maps by directly splitting the
+    /// internal entry storage, which is more efficient than building two maps
+    /// via repeated `insert` calls.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use indexmap::IndexMap;
+    ///
+    /// let map = IndexMap::from([(1, "a"), (2, "b"), (3, "c"), (4, "d")]);
+    /// let (evens, odds) = map.partition_by(|k, _v| k % 2 == 0);
+    ///
+    /// assert_eq!(evens.len(), 2);
+    /// assert_eq!(odds.len(), 2);
+    /// assert_eq!(evens[&2], "b");
+    /// assert_eq!(evens[&4], "d");
+    /// assert_eq!(odds[&1], "a");
+    /// assert_eq!(odds[&3], "c");
+    /// ```
+    pub fn partition_by<F>(&self, f: F) -> (IndexMap<K, V, S>, IndexMap<K, V, S>)
+    where
+        K: Clone,
+        V: Clone,
+        S: Clone,
+        F: FnMut(&K, &V) -> bool,
+    {
+        let (yes_core, no_core) = self.core.partition_entries(f);
+        (
+            IndexMap {
+                core: no_core,
+                hash_builder: self.hash_builder.clone(),
+            },
+            IndexMap {
+                core: yes_core,
+                hash_builder: self.hash_builder.clone(),
+            },
+        )
+    }
 }
 
 impl<K, V, S> IndexMap<K, V, S>

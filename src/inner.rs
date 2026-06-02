@@ -472,6 +472,44 @@ impl<K, V> Core<K, V> {
         insert_bulk_no_grow(&mut self.indices, &self.entries);
     }
 
+    /// Split the entries into two `Core`s based on a predicate.
+    ///
+    /// Returns `(matching, non_matching)` where `matching` contains entries
+    /// for which `pred` returns true, and `non_matching` contains the rest.
+    /// Both preserve the relative insertion order from `self`.
+    pub(crate) fn partition_entries<F>(&self, mut pred: F) -> (Self, Self)
+    where
+        K: Clone,
+        V: Clone,
+        F: FnMut(&K, &V) -> bool,
+    {
+        let mut yes_entries: Entries<K, V> = Vec::new();
+        let mut no_entries: Entries<K, V> = Vec::new();
+
+        for bucket in &self.entries {
+            if pred(&bucket.key, &bucket.value) {
+                yes_entries.push(bucket.clone());
+            } else {
+                no_entries.push(bucket.clone());
+            }
+        }
+
+        let mut yes = Core {
+            indices: Indices::with_capacity(yes_entries.len()),
+            entries: yes_entries,
+        };
+        yes.rebuild_hash_table();
+
+        let mut no = Core {
+            indices: Indices::with_capacity(no_entries.len()),
+            entries: Vec::new(),
+        };
+        no.rebuild_hash_table();
+        no.entries = no_entries;
+
+        (yes, no)
+    }
+
     pub(crate) fn reverse(&mut self) {
         self.entries.reverse();
 
