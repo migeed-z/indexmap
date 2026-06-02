@@ -1396,6 +1396,55 @@ fn test_intersect_with_asymmetric_merge() {
 }
 
 #[test]
+fn test_merge_with_basic() {
+    let map1 = IndexMap::from([(1, 10), (2, 20), (3, 30)]);
+    let map2 = IndexMap::from([(2, 200), (4, 400)]);
+    let result = map1.merge_with(&map2, |_k, v1, v2| v1 + v2);
+    assert_eq!(result.len(), 4);
+    assert_eq!(result[&1], 10);
+    assert_eq!(result[&2], 220);
+    assert_eq!(result[&3], 30);
+    assert_eq!(result[&4], 400);
+}
+
+#[test]
+fn test_merge_with_preserves_self_order() {
+    let map1 = IndexMap::from([(3, 30), (1, 10), (2, 20)]);
+    let map2 = IndexMap::from([(2, 200), (4, 400), (1, 100)]);
+    let result = map1.merge_with(&map2, |_k, v1, _v2| *v1);
+    let keys: Vec<_> = result.keys().copied().collect();
+    assert_eq!(keys, vec![3, 1, 2, 4]);
+}
+
+#[test]
+fn test_merge_with_no_overlap() {
+    let map1 = IndexMap::from([(1, 10), (2, 20)]);
+    let map2 = IndexMap::from([(3, 30), (4, 40)]);
+    let result = map1.merge_with(&map2, |_k, v1, _v2| *v1);
+    assert_eq!(result.len(), 4);
+    let keys: Vec<_> = result.keys().copied().collect();
+    assert_eq!(keys, vec![1, 2, 3, 4]);
+}
+
+#[test]
+fn test_merge_with_full_overlap() {
+    let map1 = IndexMap::from([(1, 10), (2, 20)]);
+    let map2 = IndexMap::from([(1, 100), (2, 200)]);
+    let result = map1.merge_with(&map2, |_k, v1, v2| v1 + v2);
+    assert_eq!(result[&1], 110);
+    assert_eq!(result[&2], 220);
+}
+
+#[test]
+fn test_merge_with_asymmetric_resolve() {
+    let map1 = IndexMap::from([(1, 10), (2, 20)]);
+    let map2 = IndexMap::from([(1, 100), (2, 200)]);
+    let result = map1.merge_with(&map2, |_k, self_val, _other_val| *self_val);
+    assert_eq!(result[&1], 10);
+    assert_eq!(result[&2], 20);
+}
+
+#[test]
 fn test_partition_by_empty() {
     let map: IndexMap<i32, i32> = IndexMap::new();
     let (yes, no) = map.partition_by(|_, _| true);

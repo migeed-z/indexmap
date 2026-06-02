@@ -856,6 +856,26 @@ where
     /// assert_eq!(odds[&1], "a");
     /// assert_eq!(odds[&3], "c");
     /// ```
+    /// Merge two maps, resolving key conflicts with a function.
+    ///
+    /// For keys present in both maps, calls `resolve(key, self_value, other_value)`
+    /// to determine the value in the result. Keys unique to either map are included
+    /// as-is. The result preserves insertion order from `self`, with entries unique
+    /// to `other` appended at the end.
+    pub fn merge_with<F>(&self, other: &IndexMap<K, V, S>, resolve: F) -> IndexMap<K, V, S>
+    where
+        K: Clone,
+        V: Clone,
+        S: Clone,
+        F: Fn(&K, &V, &V) -> V,
+    {
+        let merged = self.core.merge_entries(&other.core, resolve);
+        IndexMap {
+            core: merged,
+            hash_builder: self.hash_builder.clone(),
+        }
+    }
+
     pub fn partition_by<F>(&self, f: F) -> (IndexMap<K, V, S>, IndexMap<K, V, S>)
     where
         K: Clone,

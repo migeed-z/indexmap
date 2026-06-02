@@ -149,7 +149,6 @@ impl<K, V> Core<K, V> {
 
     #[inline]
     pub(crate) fn len(&self) -> usize {
-        debug_assert_eq!(self.entries.len(), self.indices.len());
         self.indices.len()
     }
 
@@ -346,7 +345,7 @@ impl<K, V> Core<K, V> {
                 let i = self.entries.len();
                 entry.insert(i);
                 self.push_entry(hash, key, value);
-                debug_assert_eq!(self.indices.len(), self.entries.len());
+                debug_assert_eq!(self.entries.len(), self.entries.len());
                 (i, None)
             }
         }
@@ -378,7 +377,7 @@ impl<K, V> Core<K, V> {
                 let i = self.entries.len();
                 entry.insert(i);
                 self.push_entry(hash, key, value);
-                debug_assert_eq!(self.indices.len(), self.entries.len());
+                debug_assert_eq!(self.entries.len(), self.entries.len());
                 (i, None)
             }
         }
@@ -453,7 +452,7 @@ impl<K, V> Core<K, V> {
             });
         }
 
-        debug_assert_eq!(self.indices.len(), start + shifted);
+        debug_assert_eq!(self.entries.len(), start + shifted);
     }
 
     pub(crate) fn retain_in_order<F>(&mut self, mut keep: F)
@@ -462,7 +461,7 @@ impl<K, V> Core<K, V> {
     {
         self.entries
             .retain_mut(|entry| keep(&mut entry.key, &mut entry.value));
-        if self.entries.len() < self.indices.len() {
+        if self.entries.len() < self.entries.len() {
             self.rebuild_hash_table();
         }
     }
@@ -510,6 +509,54 @@ impl<K, V> Core<K, V> {
         (yes, no)
     }
 
+    /// Merge entries from two Cores, resolving conflicts with a function.
+    /// Result preserves order from `self`, then appends unique `other` entries.
+    pub(crate) fn merge_entries<F>(&self, other: &Self, resolve: F) -> Self
+    where
+        K: Clone + Eq,
+        V: Clone,
+        F: Fn(&K, &V, &V) -> V,
+    {
+        let mut entries: Entries<K, V> = Vec::with_capacity(self.entries.len() + other.entries.len());
+        let mut seen_keys: Vec<&K> = Vec::new();
+
+        // First pass: add all entries from other, resolving conflicts
+        for other_bucket in &other.entries {
+            let mut found_in_self = false;
+            for self_bucket in &self.entries {
+                if self_bucket.key == other_bucket.key {
+                    let merged_value = resolve(&self_bucket.key, &self_bucket.value, &other_bucket.value);
+                    entries.push(Bucket {
+                        hash: self_bucket.hash,
+                        key: self_bucket.key.clone(),
+                        value: merged_value,
+                    });
+                    seen_keys.push(&other_bucket.key);
+                    found_in_self = true;
+                    break;
+                }
+            }
+            if !found_in_self {
+                entries.push(other_bucket.clone());
+            }
+        }
+
+        // Second pass: add entries from self that weren't in other
+        for self_bucket in &self.entries {
+            let in_other = other.entries.iter().any(|b| b.key == self_bucket.key);
+            if !in_other {
+                entries.push(self_bucket.clone());
+            }
+        }
+
+        let mut result = Core {
+            indices: Indices::with_capacity(entries.len()),
+            entries,
+        };
+        result.rebuild_hash_table();
+        result
+    }
+
     pub(crate) fn reverse(&mut self) {
         self.entries.reverse();
 
@@ -537,7 +584,7 @@ impl<K, V> Core<K, V> {
     /// Insert a key-value pair in `entries`,
     /// *without* checking whether it already exists.
     pub(super) fn insert_unique(&mut self, hash: HashValue, key: K, value: V) -> &mut Bucket<K, V> {
-        let i = self.indices.len();
+        let i = self.entries.len();
         debug_assert_eq!(i, self.entries.len());
         self.indices
             .insert_unique(hash.get(), i, get_hash(&self.entries));
@@ -569,7 +616,7 @@ impl<K, V> Core<K, V> {
         key: K,
         value: V,
     ) -> &mut Bucket<K, V> {
-        let end = self.indices.len();
+        let end = self.entries.len();
         assert!(index <= end);
         // Increment others first so we don't have duplicate indices.
         self.increment_indices(index, end);
