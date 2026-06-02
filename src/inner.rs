@@ -612,9 +612,8 @@ impl<K, V> Core<K, V> {
         // Use a heuristic between a full sweep vs. a `find()` for every shifted item.
         let shifted_entries = &self.entries[start..end];
         if shifted_entries.len() > self.indices.capacity() / 2 {
-            // Shift all indices in range.
             for i in &mut self.indices {
-                if start <= *i && *i < end {
+                if start <= *i && *i <= end {
                     *i -= 1;
                 }
             }
@@ -634,9 +633,8 @@ impl<K, V> Core<K, V> {
         // Use a heuristic between a full sweep vs. a `find()` for every shifted item.
         let shifted_entries = &self.entries[start..end];
         if shifted_entries.len() > self.indices.capacity() / 2 {
-            // Shift all indices in range.
             for i in &mut self.indices {
-                if start <= *i && *i < end {
+                if start < *i && *i < end {
                     *i += 1;
                 }
             }
