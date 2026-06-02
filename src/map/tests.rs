@@ -1520,3 +1520,29 @@ fn test_partition_by_many_elements() {
         assert_eq!(rest[&i], i * 10);
     }
 }
+
+#[test]
+fn test_partition_by_no_get_after_insert() {
+    let map = IndexMap::from([(1, 10), (2, 20), (3, 30)]);
+    let (_, mut no) = map.partition_by(|k, _| *k == 1);
+    no.insert(4, 40);
+    assert_eq!(no.get(&2), Some(&20));
+    assert_eq!(no.get(&4), Some(&40));
+}
+
+#[test]
+fn test_partition_by_no_contains_key() {
+    let map = IndexMap::from([(1, 10), (2, 20), (3, 30), (4, 40)]);
+    let (_, no) = map.partition_by(|k, _| k % 2 == 0);
+    assert!(no.contains_key(&1));
+    assert!(no.contains_key(&3));
+    assert!(!no.contains_key(&2));
+}
+
+#[test]
+fn test_partition_by_no_remove() {
+    let map = IndexMap::from([(1, 10), (2, 20), (3, 30)]);
+    let (_, mut no) = map.partition_by(|k, _| *k == 1);
+    assert_eq!(no.shift_remove(&2), Some(20));
+    assert_eq!(no.len(), 1);
+}
