@@ -1310,3 +1310,68 @@ fn is_sorted_trivial() {
     map.reverse();
     expect(&map, [false, true, false, true, false]);
 }
+
+#[test]
+fn test_intersect_with_basic() {
+    let map1 = IndexMap::from([(1, 10), (2, 20), (3, 30)]);
+    let map2 = IndexMap::from([(2, 200), (3, 300), (4, 400)]);
+    let result = map1.intersect_with(&map2, |_k, v1, v2| v1 + v2);
+    assert_eq!(result.len(), 2);
+    assert_eq!(result[&2], 220);
+    assert_eq!(result[&3], 330);
+}
+
+#[test]
+fn test_intersect_with_no_overlap() {
+    let map1 = IndexMap::from([(1, 10), (2, 20)]);
+    let map2 = IndexMap::from([(3, 30), (4, 40)]);
+    let result = map1.intersect_with(&map2, |_k, v1, _v2| *v1);
+    assert!(result.is_empty());
+}
+
+#[test]
+fn test_intersect_with_full_overlap() {
+    let map1 = IndexMap::from([(1, 10), (2, 20)]);
+    let map2 = IndexMap::from([(1, 100), (2, 200)]);
+    let result = map1.intersect_with(&map2, |_k, v1, v2| v1 * v2);
+    assert_eq!(result.len(), 2);
+    assert_eq!(result[&1], 1000);
+    assert_eq!(result[&2], 4000);
+}
+
+#[test]
+fn test_intersect_with_preserves_self_order() {
+    let map1 = IndexMap::from([(3, 30), (1, 10), (2, 20)]);
+    let map2 = IndexMap::from([(2, 200), (1, 100), (3, 300)]);
+    let result = map1.intersect_with(&map2, |_k, v1, _v2| *v1);
+    let keys: Vec<_> = result.keys().copied().collect();
+    assert_eq!(keys, vec![3, 1, 2]);
+}
+
+#[test]
+fn test_intersect_with_empty_self() {
+    let map1: IndexMap<i32, i32> = IndexMap::new();
+    let map2 = IndexMap::from([(1, 10)]);
+    let result = map1.intersect_with(&map2, |_k, v1, _v2| *v1);
+    assert!(result.is_empty());
+}
+
+#[test]
+fn test_intersect_with_empty_other() {
+    let map1 = IndexMap::from([(1, 10)]);
+    let map2: IndexMap<i32, i32> = IndexMap::new();
+    let result = map1.intersect_with(&map2, |_k, v1, _v2| *v1);
+    assert!(result.is_empty());
+}
+
+#[test]
+fn test_intersect_with_many_elements() {
+    let map1: IndexMap<i32, i32> = (0..200).map(|i| (i, i * 10)).collect();
+    let map2: IndexMap<i32, i32> = (100..300).map(|i| (i, i * 100)).collect();
+    let result = map1.intersect_with(&map2, |_k, v1, v2| v1 + v2);
+    assert_eq!(result.len(), 100);
+    assert_eq!(result[&100], 1000 + 10000);
+    assert_eq!(result[&199], 1990 + 19900);
+    assert!(!result.contains_key(&99));
+    assert!(!result.contains_key(&200));
+}

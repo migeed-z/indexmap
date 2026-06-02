@@ -811,6 +811,25 @@ where
     pub fn append<S2>(&mut self, other: &mut IndexMap<K, V, S2>) {
         self.extend(other.drain(..));
     }
+
+    /// Returns a new map containing only the keys present in both `self` and `other`.
+    /// For common keys, the value is determined by calling `f(key, self_value, other_value)`.
+    /// The result preserves the insertion order of `self`.
+    pub fn intersect_with<F>(&self, other: &IndexMap<K, V, S>, f: F) -> IndexMap<K, V, S>
+    where
+        K: Clone,
+        V: Clone,
+        S: Clone,
+        F: Fn(&K, &V, &V) -> V,
+    {
+        let mut result = IndexMap::with_hasher(self.hash_builder.clone());
+        for (key, other_val) in other {
+            if let Some(self_val) = self.get(key) {
+                result.insert(key.clone(), f(key, self_val, other_val));
+            }
+        }
+        result
+    }
 }
 
 impl<K, V, S> IndexMap<K, V, S>
