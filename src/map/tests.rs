@@ -1539,3 +1539,56 @@ fn test_symmetric_difference_preserves_self_values() {
     assert_eq!(result[&1], 10);
     assert_eq!(result[&2], 20);
 }
+
+// filter_map tests
+
+#[test]
+fn test_filter_map_all_some() {
+    let map = IndexMap::from([(1, 10), (2, 20), (3, 30)]);
+    let result = map.filter_map(|_k, v| Some(v * 2));
+    assert_eq!(result.len(), 3);
+    assert_eq!(result[&1], 20);
+    assert_eq!(result[&2], 40);
+    assert_eq!(result[&3], 60);
+}
+
+#[test]
+fn test_filter_map_excludes_none() {
+    let map = IndexMap::from([(1, 10), (2, 20), (3, 30), (4, 40)]);
+    let result = map.filter_map(|k, v| {
+        if k % 2 == 0 { Some(v * 10) } else { None }
+    });
+    assert_eq!(result.len(), 2);
+    assert!(result.contains_key(&2));
+    assert!(result.contains_key(&4));
+    assert!(!result.contains_key(&1));
+    assert!(!result.contains_key(&3));
+}
+
+#[test]
+fn test_filter_map_none_length() {
+    let map = IndexMap::from([(1, 10), (2, 20), (3, 30)]);
+    let result = map.filter_map(|_k, _v| None::<i32>);
+    assert!(result.is_empty());
+}
+
+#[test]
+fn test_filter_map_preserves_order() {
+    let map = IndexMap::from([(5, 50), (3, 30), (1, 10), (4, 40), (2, 20)]);
+    let result = map.filter_map(|k, v| {
+        if *k > 2 { Some(*v) } else { None }
+    });
+    let keys: Vec<_> = result.keys().copied().collect();
+    assert_eq!(keys, vec![5, 3, 4]);
+}
+
+#[test]
+fn test_filter_map_transforms_values() {
+    let map = IndexMap::from([(1, 10), (2, 20), (3, 30)]);
+    let result = map.filter_map(|_k, v| {
+        if *v >= 20 { Some(v + 1) } else { None }
+    });
+    assert_eq!(result.len(), 2);
+    assert_eq!(result[&2], 21);
+    assert_eq!(result[&3], 31);
+}

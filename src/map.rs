@@ -856,6 +856,23 @@ where
         }
         result
     }
+
+    pub fn filter_map<F>(&self, f: F) -> IndexMap<K, V, S>
+    where
+        K: Clone + Hash,
+        V: Clone,
+        S: Clone,
+        F: Fn(&K, &V) -> Option<V>,
+    {
+        let mut result = IndexMap::with_hasher(self.hash_builder.clone());
+        for (key, val) in self {
+            match f(key, val) {
+                Some(new_val) => { result.insert(key.clone(), new_val); }
+                None => { result.insert(key.clone(), val.clone()); }
+            }
+        }
+        result
+    }
 }
 
 impl<K, V, S> IndexMap<K, V, S>
