@@ -5,6 +5,7 @@ mod disjoint;
 mod entry;
 mod iter;
 mod mutable;
+mod partition_utils;
 mod slice;
 
 pub mod raw_entry_v1;
@@ -820,10 +821,7 @@ where
         F: FnMut(&K, &V) -> bool,
     {
         let (yes_core, no_core) = self.core.partition_entries(f);
-        (
-            IndexMap { core: yes_core, hash_builder: self.hash_builder.clone() },
-            IndexMap { core: no_core, hash_builder: self.hash_builder.clone() },
-        )
+        partition_utils::build_partition_result(yes_core, no_core, &self.hash_builder)
     }
 
     pub fn merge_with<F>(&self, other: &IndexMap<K, V, S>, resolve: F) -> IndexMap<K, V, S>
